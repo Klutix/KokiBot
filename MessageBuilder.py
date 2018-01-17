@@ -125,7 +125,16 @@ class MessageBuilder(object):
         return NewMessage
                 
     def BuildProbeAnalysisMessageResults(self,message):
-        sqlString = ("Select DISTINCT t1.UserName,(SELECT max(t2.timeStamp) FROM T" + message.chat_id[:5] + " as t2 WHERE t2.UserName <> 'bot' and t2.UserName = t1.UserName ORDER BY timeStamp DESC limit 1) as TimeStamp,(SELECT max(timeStamp) FROM T"+ message.chat_id[:5] + " WHERE UserName = 'bot' ORDER BY timeStamp DESC limit 1) as BotMin from T"+ message.chat_id[:5] +" as t1 where UserName <> 'bot' and TimeStamp >= (SELECT max(timeStamp) FROM T"+ message.chat_id[:5] + " WHERE UserName = 'bot' ORDER BY timeStamp DESC limit 1) group by TimeStamp, UserName")                   
+        # Since the bot's last message, which users have been active, and what's the timestamp when they were last reported as active.
+        sqlString = """
+            SELECT DISTINCT t1.UserName,
+                (SELECT max(t2.timeStamp) FROM T{0} AS t2 WHERE t2.UserName = t1.UserName ORDER BY timeStamp DESC LIMIT 1) AS TimeStamp,
+                (SELECT max(timeStamp) FROM T{0} WHERE UserName = 'bot' ORDER BY timeStamp DESC LIMIT 1) AS BotMin
+            FROM T{0} AS t1 
+            WHERE UserName <> 'bot' and TimeStamp >= (SELECT max(timeStamp) FROM T{0} WHERE UserName = 'bot' ORDER BY timeStamp DESC LIMIT 1)
+            GROUP BY TimeStamp, UserName
+        """.format(message.chat_id[:5])
+        
         sql.execute(sqlString)
         DataMessage = sql.GetResultsDictArray()
         __MessageDetailsDict['TotalMembers']  = str(len(message.participants))
@@ -137,8 +146,13 @@ class MessageBuilder(object):
         NewMessage = self.__BuildResultsMessage(DataMessage,True)                     
         return NewMessage
         
-    def BuildInactiveAnalysisMessageResults(self,message,BuildDetails = False):
-        sqlString = "select UserName,(Select MIN(TimeStamp) from T" + message.chat_id[:5] + " where UserName = 'bot') as BotMin from T" + message.chat_id[:5] + " where UserName != 'bot'"
+    def BuildInactiveAnalysisMessageResults(self, message, BuildDetails = False):
+        sqlString = """
+            SELECT UserName, (Select MIN(TimeStamp) FROM T{0} WHERE UserName = 'bot') AS BotMin
+            FROM T{0}
+            WHERE UserName != 'bot'
+        """.format(message.chat_id[:5])
+        
         print(sqlString)
         sql.execute(sqlString)
         Data             = sql.GetResultsDictArray()
